@@ -5,107 +5,190 @@ const path = require("path");
 const app = express();
 const port = 3000;
 
+// Chemin vers le fichier db.json
 const dataPath = path.join(__dirname, "data", "db.json");
 
+// Ajout d'un middleware de validation
+const validateProduct = (req, res, next) => {
+  const { name, price, quantity } = req.body;
+
+  // Vérifier si name existe et n'est pas un nombre
+  if (
+    name === undefined ||
+    name === "" ||
+    typeof name !== "string" ||
+    !isNaN(Number(name))
+  ) {
+    return res.status(400).json({
+      message: "Le nom est obligatoire et doit etre un string.",
+    });
+  }
+  // Vérifier si price et quantity existent et sont bien des nombres
+  if (price === undefined || price === "" || isNaN(Number(price))) {
+    return res.status(400).json({
+      message: "Le prix est obligatoire et doit être un nombre valide.",
+    });
+  }
+
+  if (quantity === undefined || quantity === "" || isNaN(Number(quantity))) {
+    return res.status(400).json({
+      message: "La quantité est obligatoire et doit être un nombre valide.",
+    });
+  }
+
+  // Vérifier que price et quantity ne sont pas négatifs
+  if (+price < 0) {
+    return res.status(400).json({
+      message: "Le prix ne peut pas être négatif.",
+    });
+  }
+
+  if (+quantity < 0) {
+    return res.status(400).json({
+      message: "La quantité ne peut pas être négative.",
+    });
+  }
+
+  next();
+};
+
+// Middleware pour parser le JSON
 app.use(express.json());
 
+// route
 app.get("/", (req, res) => {
   res.send("hello world");
 });
 
-const readData = () => {
+// Helper pour lire les données du fichier JSON
+const readProducts = () => {
   const data = fs.readFileSync(dataPath, "utf-8");
-  return JSON.parse(data); //JSON.parse converti la data en objet
+  return JSON.parse(data);
 };
 
-const writeData = (data) => {
+// Helper pour écrire les données dans le fichier JSON
+const createProduct = (data) => {
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf-8");
 };
 
-// 6- Ajouter un middleware pour vérifier que le prix et la quantité sont des nombres valides
-const validateProduct = (req, res, next) => {
-  const { price, qte } = req.body;
-  if (price && isNaN(price) && qte && isNaN(qte)) {
-    return res
-      .status(400)
-      .send({ message: "le prix et la quantité doivent etre des nombres" });
-  }
-  next();
-};
-
-// 7- Ajouter un middleware de gestion d'erreurs de manière globale
-const errorHandler = (err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: "Une erreur interne est survenue" });
-};
-
-// 1- Mettez en place une route permetant d'avoir tous les produits
+// Route pour récupérer tous les éléments (READ)
 app.get("/products", (req, res) => {
-  const data = readData();
-  res.status(200).json(data);
+  const products = readProducts();
+  res.status(200).json(products);
 });
 
-/* 2- Mettez en place une route permetant d'ajouter des produits en stock et lever 
-une exception lorsque les propriétés de ces produits là n'existent pas lors de la mise en stock */
-app.post("/products", validateProduct, (req, res) => {
-  const { name, price, qte } = req.body;
-  // console.log(req.body);
-  if (!name || (!price && isNaN(price)) || (!qte && isNaN(qte))) {
-    return res
-      .status(400)
-      .send({ message: "Veuillez renseigner toutes de propriétes du produit" });
-  } else {
-    const data = readData();
-    const newData = { id: data.length + 1, ...req.body };
-    data.push(newData);
-    writeData(data);
-    res.status(200).json(newData);
-  }
-});
-
-// 3- Mettez en place une route permetant de retouner un produit en particulier
+// Route pour récupérer un élément par son ID (READ)
 app.get("/products/:id", (req, res) => {
-  const data = readData();
-  const productID = parseInt(req.params.id);
-  const productFind = data.find((item) => item.id === productID);
+  const products = readProducts();
+  const currentProductID = +req.params.id;
+  const product = products.find((product) => product.id === currentProductID);
 
-  if (!productFind) {
+  if (!product) {
     return res.status(404).json({ message: "Produit non trouvé" });
   }
 
-  res.status(200).json(productFind);
+  res.status(200).json(product);
 });
 
-/* 4- Mettez en place une route permetant de mettre à jour un produit en particulier en tenant compte du fait que
-l'utilisateur à la possibilité de modifier une propriété qu'il veut */
-app.put("/products/:id", (req, res) => {
-  const data = readData();
-  const productID = parseInt(req.params.id);
-  const productIndex = data.findIndex((item) => item.id === productID);
+// Route pour créer un nouvel élément (CREATE)
+app.post("/products", validateProduct, (req, res) => {
+  const products = readProducts();
+  const { name, price, quantity } = req.body;
+
+  if (!name || !price || !quantity) {
+    return res.status(400).json({
+      message: "Le nom, le prix, et la quantité sont des champs obligatoires",
+    });
+  }
+
+  const newProduct = {
+    id: products.length + 1,
+    name,
+    price: +price,
+    quantity: +quantity,
+  };
+
+  products.push(newProduct);
+  createProduct(products);
+
+  res.status(201).json({
+    message: "Le produit a bien été ajouté au stock",
+    data: newProduct,
+  });
+});
+
+// Route pour mettre à jour un élément (UPDATE)
+app.put("/products/:id", validateProduct, (req, res) => {
+  const products = readProducts();
+  const { name, price, quantity } = req.body;
+  const currentProductID = +req.params.id;
+  const productIndex = products.findIndex(
+    (product) => product.id === currentProductID
+  );
 
   if (productIndex === -1) {
-    return res.status(404).json({ message: "Le produit n'existe pas" });
+    return res.status(404).json({ message: "Produit non trouvé" });
   }
-  data[productIndex] = { ...data[productIndex], ...req.body };
-  writeData(data);
-  res.status(200).json(data[productIndex]);
+
+  const updatedProduct = { ...products[productIndex] };
+
+  if (name !== undefined && name.trim() !== "") {
+    updatedProduct.name = name;
+  }
+
+  if (price !== undefined) {
+    if (isNaN(Number(price)) || Number(price) < 0) {
+      return res
+        .status(400)
+        .json({ message: "Le prix doit être un nombre valide et positif." });
+    }
+    updatedProduct.price = Number(price);
+  }
+
+  if (quantity !== undefined) {
+    if (isNaN(Number(quantity)) || Number(quantity) < 0) {
+      return res.status(400).json({
+        message: "La quantité doit être un nombre valide et positive.",
+      });
+    }
+    updatedProduct.quantity = Number(quantity);
+  }
+
+  products[productIndex] = updatedProduct;
+  createProduct(products);
+
+  res.status(200).json({
+    message: "Produit mis à jour avec succès.",
+    data: updatedProduct,
+  });
 });
 
-// 5- Mettez en place une route permetant de supprimer un produit en particulier
+// Route pour supprimer un élément (DELETE)
 app.delete("/products/:id", (req, res) => {
-  const data = readData();
-  const productID = parseInt(req.params.id);
-  const productIndex = data.findIndex((item) => item.id === productID);
+  const products = readProducts();
+  const currentProductID = +req.params.id;
+  const productIndex = products.findIndex(
+    (item) => item.id === currentProductID
+  );
+
   if (productIndex === -1) {
-    return res.status(404).json({ message: "Le produit n'existe pas" });
+    return res.status(404).json({ message: "Produit non trouvé" });
   }
-  data.splice(productIndex, 1);
-  writeData(data);
-  res.status(204).send("Suppression réussie");
+
+  products.splice(productIndex, 1);
+  createProduct(products);
+
+  res.status(204).send();
 });
 
-app.use(errorHandler);
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    message: "Une erreur a étè detecté, veuillez patientez s'il vous plait",
+  });
+});
 
+// Démarrer le serveur
 app.listen(port, () => {
-  console.log(`Serveur démarré sur 120.0.0.1:${port}`);
+  console.log(`Serveur démarré sur http://localhost:${port}`);
 });

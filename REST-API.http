@@ -1,0 +1,16 @@
+GET http://localhost:3000/products/
+
+###
+
+GET http://localhost:3000/products/6
+
+###
+
+POST http://localhost:3000/products
+Content-Type: application/json
+
+{
+    "name": "ecouteurs",
+    "price": 2000,
+    "quantity": 10
+}
