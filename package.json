@@ -1,0 +1,21 @@
+{
+  "name": "exo_2_express",
+  "version": "1.0.0",
+  "description": "La gestion d'un magain",
+  "main": "main.js",
+  "scripts": {
+    "start": "nodemon main.js"
+  },
+  "keywords": [
+    "node.js",
+    "javascript"
+  ],
+  "author": "kalo soualio",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
